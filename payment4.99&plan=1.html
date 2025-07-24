@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Verification</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #00bfa5;
+            --primary-dark: #008f7a;
+            --danger-color: #f02849;
+            --text-primary: #1d2129;
+            --text-secondary: #606770;
+            --border-color: #ccd0d5;
+            --bg-color: #f0f2f5;
+            --surface-color: #ffffff;
+            --success-color: #42b72a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: var(--surface-color);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="file"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .instructions {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .instructions ol {
+            padding-left: 20px;
+            margin: 10px 0;
+        }
+
+        .loader {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            background-color: #e6f7f5;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: var(--primary-dark);
+        }
+
+        .error-message {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            background-color: #fde8eb;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            color: var(--danger-color);
+        }
+
+        #screenshotPreview {
+            max-width: 100%;
+            margin-top: 10px;
+            display: none;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .payment-methods {
+            margin: 25px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+
+        .payment-method {
+            margin-bottom: 15px;
+        }
+
+        .payment-method h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            font-size: 16px;
+        }
+
+        .upi-qr-container {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        #upiQrCode {
+            display: inline-block;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .upi-details {
+            background-color: white;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upi-id {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text-primary);
+        }
+
+        .copy-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .copy-btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .copy-success {
+            display: none;
+            color: var(--success-color);
+            font-size: 13px;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Payment Verification</h1>
+        
+        <div class="success-message" id="successMessage">
+            <h3>Payment Submitted Successfully!</h3>
+            <p>Your payment verification is being processed. You'll receive a confirmation email shortly.</p>
+        </div>
+        
+        <div class="error-message" id="errorMessage">
+            <h3>Error Submitting Payment</h3>
+            <p id="errorText">Please try again or contact support.</p>
+        </div>
+        
+        <div class="instructions">
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Pay 99rs With Your Upi App</li>
+                <li>Complete your payment using UPI (QR code or UPI ID below)</li>
+                <li>Take a screenshot of the successful payment</li>
+                <li>Fill the UTR number from your payment receipt</li>
+                <li>Enter your details and submit the form</li>
+            </ol>
+            <p>Your verification will be processed within 24 hours.</p>
+        </div>
+
+        <div class="payment-methods">
+            <div class="payment-method">
+                <h3>Pay via UPI</h3>
+                <div class="upi-qr-container">
+                    <div id="upiQrCode"></div>
+                </div>
+                <div class="upi-details">
+                    <div>
+                        <div class="upi-id" id="upiId">hackertmm@upi</div>
+                        <div class="copy-success" id="copySuccess">Copied to clipboard!</div>
+                    </div>
+                    <button class="copy-btn" id="copyUpiBtn">Copy</button>
+                </div>
+            </div>
+        </div>
+        
+        <form id="paymentForm">
+            <div class="form-group">
+                <label for="name">Your Name</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="utr">UTR Number (Transaction Reference)</label>
+                <input type="text" id="utr" name="utr" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="screenshot">Payment Screenshot (SS)</label>
+                <input type="file" id="screenshot" name="screenshot" accept="image/*" required>
+                <img id="screenshotPreview" src="#" alt="Screenshot Preview">
+            </div>
+            
+            <div class="form-group">
+                <label for="notes">Additional Notes (Optional)</label>
+                <textarea id="notes" name="notes" placeholder="Any additional information about your payment..."></textarea>
+            </div>
+            
+            <button type="submit" id="submitBtn">Submit Payment Verification</button>
+        </form>
+    </div>
+    
+    <div class="loader" id="loader">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+       // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAfxyYXOizJgcAPS0gy4cOCM5Et0MZCA1E",
+  authDomain: "aryan-x-offical.firebaseapp.com",
+  projectId: "aryan-x-offical",
+  storageBucket: "aryan-x-offical.firebasestorage.app",
+  messagingSenderId: "238049583208",
+  appId: "1:238049583208:web:542d6462259bee1ba55bdd",
+  measurementId: "G-P4QNZ83BR3"
+};
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        // DOM elements
+        const paymentForm = document.getElementById('paymentForm');
+        const loader = document.getElementById('loader');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        const submitBtn = document.getElementById('submitBtn');
+        const screenshotInput = document.getElementById('screenshot');
+        const screenshotPreview = document.getElementById('screenshotPreview');
+        const copyUpiBtn = document.getElementById('copyUpiBtn');
+        const upiId = document.getElementById('upiId');
+        const copySuccess = document.getElementById('copySuccess');
+        
+        // Generate UPI QR Code
+        function generateUpiQr() {
+            const upiString = `upi://pay?pa=${upiId.textContent}&pn=HackerTMM&am=&cu=INR`;
+            new QRCode(document.getElementById("upiQrCode"), {
+                text: upiString,
+                width: 180,
+                height: 180,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+        
+        // Copy UPI ID to clipboard
+        copyUpiBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(upiId.textContent).then(function() {
+                copySuccess.style.display = 'block';
+                setTimeout(function() {
+                    copySuccess.style.display = 'none';
+                }, 2000);
+            });
+        });
+        
+        // Show screenshot preview when file is selected
+        screenshotInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    screenshotPreview.src = event.target.result;
+                    screenshotPreview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Show loader
+        function showLoader() {
+            loader.style.display = 'flex';
+            submitBtn.disabled = true;
+        }
+        
+        // Hide loader
+        function hideLoader() {
+            loader.style.display = 'none';
+            submitBtn.disabled = false;
+        }
+        
+        // Handle form submission
+        paymentForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const utr = document.getElementById('utr').value.trim();
+            const notes = document.getElementById('notes').value.trim();
+            const screenshotFile = document.getElementById('screenshot').files[0];
+            
+            // Validate required fields
+            if (!name || !email || !utr || !screenshotFile) {
+                errorText.textContent = 'Please fill all required fields';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            // Validate email format
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errorText.textContent = 'Please enter a valid email address';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            // Validate image size (max 2MB)
+            if (screenshotFile.size > 2 * 1024 * 1024) {
+                errorText.textContent = 'Image size should be less than 2MB';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            showLoader();
+            errorMessage.style.display = 'none';
+            
+            try {
+                // Convert image to base64
+                const base64Image = await convertImageToBase64(screenshotFile);
+                
+                // Create payment request data with base64 image
+                const paymentData = {
+                    name: name,
+                    email: email,
+                    utr: utr,
+                    screenshotBase64: base64Image,
+                    notes: notes || 'No additional notes',
+                    status: 'pending',
+                    timestamp: Date.now(),
+                    processedAt: null
+                };
+                
+                // Save to Firebase Database
+                const newRequestRef = database.ref('paymentRequests').push();
+                await newRequestRef.set(paymentData);
+                
+                // Show success message
+                paymentForm.reset();
+                screenshotPreview.style.display = 'none';
+                successMessage.style.display = 'block';
+                window.scrollTo(0, 0);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                errorText.textContent = 'An error occurred. Please try again later.';
+                errorMessage.style.display = 'block';
+            } finally {
+                hideLoader();
+            }
+        });
+        
+        // Convert image file to base64
+        function convertImageToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Generate UPI QR code
+            generateUpiQr();
+            
+            // Pre-fill name from URL if available
+            const urlParams = new URLSearchParams(window.location.search);
+            const nameParam = urlParams.get('name');
+            if (nameParam) {
+                document.getElementById('name').value = decodeURIComponent(nameParam);
+            }
+        });
+    </script>
+</body>
+</html>
